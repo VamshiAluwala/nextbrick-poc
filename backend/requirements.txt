@@ -6,7 +6,9 @@ langchain
 langchain-openai
 langchain-core
 langchain-community
+pypdf
 langchain-elasticsearch
+langchain-ollama
 langchain-text-splitters
 langchain-huggingface
 sentence-transformers

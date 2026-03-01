@@ -36,7 +36,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
-      CLUSTER_ID: "nextbrick-kafka-cluster-01"
+      CLUSTER_ID: "keysight-kafka-cluster-01"
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:

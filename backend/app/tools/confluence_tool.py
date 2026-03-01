@@ -33,7 +33,7 @@ _MOCK_PAGES = [
         "title": "IoT Sensor Installation Guide",
         "space": "PRODUCTS",
         "excerpt": "Step-by-step guide for installing and configuring IoT sensors in industrial environments. Covers mounting, wiring, firmware update, and first-boot calibration.",
-        "url": "https://confluence.nextbrick.com/display/PRODUCTS/iot-sensor-installation",
+        "url": "https://confluence.keysight.com/display/PRODUCTS/iot-sensor-installation",
         "last_modified": "2026-02-15",
     },
     {
@@ -41,15 +41,15 @@ _MOCK_PAGES = [
         "title": "Customer Onboarding Checklist",
         "space": "CS",
         "excerpt": "Standard onboarding process for new enterprise customers: account setup, license activation, training schedule, and go-live sign-off criteria.",
-        "url": "https://confluence.nextbrick.com/display/CS/customer-onboarding",
+        "url": "https://confluence.keysight.com/display/CS/customer-onboarding",
         "last_modified": "2026-01-20",
     },
     {
         "id": "103",
         "title": "Calibration Certificate Process",
         "space": "QUALITY",
-        "excerpt": "How to request, track, and download calibration certificates for Nextbrick instruments. Covers portal login, asset lookup, and certificate PDF download.",
-        "url": "https://confluence.nextbrick.com/display/QUALITY/calibration-cert",
+        "excerpt": "How to request, track, and download calibration certificates for Keysight instruments. Covers portal login, asset lookup, and certificate PDF download.",
+        "url": "https://confluence.keysight.com/display/QUALITY/calibration-cert",
         "last_modified": "2026-02-01",
     },
     {
@@ -57,7 +57,7 @@ _MOCK_PAGES = [
         "title": "Escalation Matrix — Tier 2 Support",
         "space": "SUPPORT",
         "excerpt": "Defines when and how to escalate support cases to Tier 2 engineering. Includes SLA thresholds, contact list, and Jira escalation template.",
-        "url": "https://confluence.nextbrick.com/display/SUPPORT/escalation-matrix",
+        "url": "https://confluence.keysight.com/display/SUPPORT/escalation-matrix",
         "last_modified": "2026-02-20",
     },
     {
@@ -65,7 +65,7 @@ _MOCK_PAGES = [
         "title": "Pricing & Discount Policy FY2026",
         "space": "SALES",
         "excerpt": "Approved discount tiers, regional pricing adjustments, and CPQ configuration rules for FY2026. Requires Sales VP approval for discounts above 25%.",
-        "url": "https://confluence.nextbrick.com/display/SALES/pricing-policy-fy2026",
+        "url": "https://confluence.keysight.com/display/SALES/pricing-policy-fy2026",
         "last_modified": "2026-01-05",
     },
 ]

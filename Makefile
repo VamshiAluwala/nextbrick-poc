@@ -1,11 +1,11 @@
 # ─── Makefile ─────────────────────────────────────────────────────────────────
-# Nextbrick Agentic AI POC — all commands from the project root
+# Keysight Agentic AI POC — all commands from the project root
 # Usage:  make <target>
 .PHONY: help dev build run stop logs clean pipeline-up pipeline-down pipeline-logs
 
-IMAGE   = nextbrick-ai
+IMAGE   = keysight-ai
 BACKEND = backend
-FRONTEND= nextbrick-ai-assistant-main
+FRONTEND= keysight-ai-assistant-main
 
 help:                          ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?##"}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -23,7 +23,7 @@ run:                           ## Run the app locally (no Docker needed)
 
 docker-run:                    ## Run the combined Docker image (requires Docker)
 	docker run -d \
-	  --name nextbrick \
+	  --name keysight \
 	  -p 80:80 \
 	  -p 8000:8000 \
 	  --env-file $(BACKEND)/.env \
@@ -42,14 +42,14 @@ compose-down:                  ## Stop docker-compose services
 	docker compose down
 
 # ── Ops ───────────────────────────────────────────────────────────────────────
-stop:                          ## Stop and remove the nextbrick container
-	docker stop nextbrick && docker rm nextbrick
+stop:                          ## Stop and remove the keysight container
+	docker stop keysight && docker rm keysight
 
 logs:                          ## Tail logs from the running container
-	docker logs -f nextbrick
+	docker logs -f keysight
 
 clean:                         ## Remove the image and stopped containers
-	docker rm -f nextbrick 2>/dev/null || true
+	docker rm -f keysight 2>/dev/null || true
 	docker rmi $(IMAGE):latest 2>/dev/null || true
 
 # ── Kafka + Spark Pipeline ────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
-# Nextbrick Agentic AI — Setup Guide
+# Keysight Agentic AI — Setup Guide
 
-> **Stack:** FastAPI backend · React/Vite frontend · LangChain ReAct Agent · Elasticsearch · Kafka · BGE-M3 embeddings (runs on-device, no API key)
+> **Stack:** FastAPI backend · React/Vite frontend · LangChain ReAct Agent · Elasticsearch · Kafka · BGE-M3 embeddings · gpt-oss:120b-cloud (runs on-device/cloud, no API key)
 
 ---
 
@@ -39,14 +39,14 @@ Minimum required values:
 ```env
 # ── LLM (local Ollama) ────────────────────────────
 ONPREM_MODEL_URL=http://localhost:11434
-ONPREM_MODEL_NAME=qwen2.5-coder:latest
+ONPREM_MODEL_NAME=gpt-oss:120b-cloud
 ONPREM_MODEL_API_KEY=EMPTY
 
 # ── Elasticsearch ─────────────────────────────────
 ES_HOST=http://localhost:9200
 ES_USERNAME=elastic
 ES_PASSWORD=changeme
-ES_VECTOR_INDEX=nextbrick-vectors
+ES_VECTOR_INDEX=keysight-vectors
 
 # ── Embeddings (BGE-M3 — runs locally, no API key) ─
 EMBEDDING_MODEL=BAAI/bge-m3
@@ -57,6 +57,12 @@ FRONTEND_URL=http://localhost:8080
 # ── Kafka (optional) ──────────────────────────────
 KAFKA_ENABLED=false              # set true when Kafka is running
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+# ── Salesforce (OAuth2 client_credentials) ───────
+SF_TOKEN_URL=https://your-instance.my.salesforce.com/services/oauth2/token
+SF_CLIENT_ID=your_connected_app_client_id
+SF_CLIENT_SECRET=your_connected_app_client_secret
+SF_API_BASE_URL=https://your-instance.my.salesforce.com/services/data/v60.0
 ```
 
 ---
@@ -77,7 +83,7 @@ docker run -d \
 curl -u elastic:changeme http://localhost:9200
 ```
 
-The `nextbrick-vectors` index is **created automatically** when the first search request hits the backend.
+The `keysight-vectors` index is **created automatically** when the first search request hits the backend.
 
 ---
 
@@ -87,8 +93,9 @@ The `nextbrick-vectors` index is **created automatically** when the first search
 # Install Ollama
 brew install ollama
 
-# Pull the model (runs locally, ~5 GB)
-ollama pull qwen2.5-coder:latest
+# Pull / use the model (e.g. gpt-oss:120b-cloud from your registry)
+# If using Ollama: ollama pull <your-model-tag>
+# If using gpt-oss:120b-cloud, set ONPREM_MODEL_URL to the model API base URL
 
 # Start the Ollama server (keep this running)
 ollama serve
@@ -115,7 +122,7 @@ cd ..
 ## 6 — Install frontend dependencies
 
 ```bash
-cd nextbrick-ai-assistant-main
+cd keysight-ai-assistant-main
 npm install
 cd ..
 ```
@@ -301,7 +308,7 @@ dcx/
 │   │       └── confluence_tool.py
 │   ├── requirements.txt
 │   └── .env                    # your local config (not committed)
-├── nextbrick-ai-assistant-main/ # React/Vite frontend
+├── keysight-ai-assistant-main/ # React/Vite frontend
 ├── data-pipeline/
 │   ├── producer/kafka_producer.py
 │   ├── consumer/spark_consumer.py

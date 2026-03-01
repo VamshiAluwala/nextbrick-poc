@@ -1,14 +1,7 @@
 # backend/app/services/agent_service.py
 # ─────────────────────────────────────────────────────────────────────────────
-# Orchestrated LangChain ReAct Agent.
-#
-# This is the core of the agentic architecture. It:
-#   1. Binds ALL_TOOLS (Salesforce, Confluence, Elasticsearch) to the LLM
-#   2. Creates a ReAct agent that reasons about which tool to call
-#   3. Executes tool calls and feeds results back to the LLM
-#   4. Returns both the final answer and a log of every tool step
-#
-# The agent uses the same LLM as the existing chat service, configured via .env.
+# Single agent service: imports ALL_TOOLS from app.tools, builds system prompt
+# from tool names/descriptions (no hardcoded keywords), and runs create_agent.
 # ─────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 import time
@@ -16,8 +9,7 @@ import structlog
 from typing import List, Optional
 from dataclasses import dataclass, field
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_core.agents import AgentAction, AgentFinish
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from app.config import settings
 from app.models.chat import MessageItem
@@ -25,31 +17,32 @@ from app.tools import ALL_TOOLS
 
 log = structlog.get_logger(__name__)
 
-# ── System prompt ─────────────────────────────────────────────────────────────
+# ── System prompt (built from tools; no hardcoded tool names) ─────────────────
 
-AGENT_SYSTEM_PROMPT = """\
-You are an enterprise AI assistant for Nextbrick. You have access to three categories of tools:
-
-SALESFORCE TOOLS:
-- salesforce_get_case: Look up a support case by ID
-- salesforce_create_case: Open a new support case
-- salesforce_get_order: Look up an order by ID
-
-CONFLUENCE TOOLS:
-- confluence_search: Search the internal knowledge base for guides, policies, how-tos
-- confluence_get_page: Retrieve a specific Confluence page by ID
-
-ELASTICSEARCH TOOLS:
-- elasticsearch_semantic_search: Semantic search across all indexed documents (use as default fallback)
-- elasticsearch_ingest_document: Add a new document to the knowledge base
-
+def _build_system_prompt(tools: list) -> str:
+    """Build system prompt from the list of tools: intro + tool list from descriptions."""
+    app_name = getattr(settings, "app_name", "AI Assistant")
+    intro = f"You are an enterprise AI assistant for {app_name}. You have access to the following tools:\n\n"
+    tool_lines = []
+    for t in tools:
+        name = getattr(t, "name", str(t))
+        desc = getattr(t, "description", "") or ""
+        tool_lines.append(f"- {name}: {desc.strip()}")
+    instructions = """
 INSTRUCTIONS:
-- Always use the most specific tool for the task. If the user mentions an order, use salesforce_get_order.
-- Chain tools when needed: search Confluence first, then get_page for the full content.
-- Cite your sources in the final answer (tool name + key field like case ID or page title).
-- If no specific tool applies, use elasticsearch_semantic_search to find relevant context.
-- Be concise and professional. Support English, German, Spanish, and Chinese.
+- You MUST use the tools to answer. Do NOT give generic refusals, apologies, or made-up reasons (e.g. "I cannot connect", "I am unable to access the system", "try again later"). Always call the relevant tool first.
+- For orders: use salesforce_get_all_orders to list orders, or salesforce_get_order for a specific order ID. For cases: use salesforce_get_case or salesforce_create_case. For custom data: use salesforce_query with SOQL.
+- When creating a case: the user must provide both subject and description. If either is missing, do NOT call salesforce_create_case yet — ask the user to provide the subject and description; once they reply with both, then call the tool to create the case.
+- For documentation or product questions: use elasticsearch_ollama_semantic_search to get content from the indexed docs; base your answer ONLY on the retrieved content.
+- Only report errors when the tool itself returns an error. Do not refuse to call a tool or invent connectivity issues.
+- Use the most specific tool for each task. Chain tools when needed (e.g. search then get details).
+
+RESPONSE FORMAT — keep answers clean and user-facing only:
+- Do NOT include in your reply: source citations, "Source: ...", file names, file paths, internal paths, "How to access", "Location (internal path)", or any tool/metadata attribution. The user should see only the actual answer.
+- Provide data from the tools (embedding/index or API) only: summarize or quote the retrieved content clearly and concisely. No extra boilerplate about where the data came from.
+- Be concise and professional. Give a clear, direct response with the information the user asked for.
 """
+    return intro + "\n".join(tool_lines) + instructions
 
 
 # ── Response dataclass ─────────────────────────────────────────────────────────
@@ -71,59 +64,42 @@ class AgentResult:
 
 
 # ── Agent factory ──────────────────────────────────────────────────────────────
+# Uses create_agent with wrap_model_call middleware for dynamic model selection.
+# Tools come only from app.tools.ALL_TOOLS (no separate tool service).
 
-def _build_agent_executor():
+def _build_agent():
     """
-    Build a LangChain AgentExecutor with ReAct prompting.
-    Returns None if no LLM is configured.
+    Build a LangChain agent via create_agent with dynamic model selection middleware.
+    Basic model for short conversations; advanced (cloud) model when message count > threshold.
+    Tools = ALL_TOOLS from app.tools. Returns None if no LLM is configured.
     """
     from app.services.llm_service import build_llm
-    llm = build_llm()
-    if llm is None:
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+
+    basic_model = build_llm(profile="default")
+    if basic_model is None:
         return None
 
-    from langchain.agents import create_react_agent, AgentExecutor
-    from langchain.prompts import PromptTemplate
+    advanced_model = build_llm(profile="advanced") or basic_model
+    message_count_threshold = getattr(settings, "agent_advanced_message_threshold", 10)
 
-    # ReAct prompt template — LangChain's standard format
-    react_template = """\
-{system_prompt}
+    @wrap_model_call
+    def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
+        message_count = len(request.state.get("messages", []))
+        if message_count > message_count_threshold:
+            model = advanced_model
+        else:
+            model = basic_model
+        return handler(request.override(model=model))
 
-You have access to the following tools:
-{tools}
-
-Use the following format EXACTLY:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action (as a JSON object)
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}"""
-
-    prompt = PromptTemplate(
-        input_variables=["input", "agent_scratchpad", "tools", "tool_names"],
-        partial_variables={"system_prompt": AGENT_SYSTEM_PROMPT},
-        template=react_template,
-    )
-
-    agent = create_react_agent(llm=llm, tools=ALL_TOOLS, prompt=prompt)
-    executor = AgentExecutor(
-        agent=agent,
+    system_prompt = _build_system_prompt(ALL_TOOLS)
+    return create_agent(
+        model=basic_model,
         tools=ALL_TOOLS,
-        max_iterations=6,
-        verbose=False,
-        return_intermediate_steps=True,
-        handle_parsing_errors=True,
+        system_prompt=system_prompt,
+        middleware=[dynamic_model_selection],
     )
-    return executor
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -143,18 +119,17 @@ def invoke_agent(
     bound_log.info("agent.invoke.start")
     start = time.perf_counter()
 
-    executor = _build_agent_executor()
+    agent = _build_agent()
 
     # ── Demo mode: no LLM configured ─────────────────────────────────────────
-    if executor is None:
+    if agent is None:
         bound_log.warning("agent.demo_mode")
+        tool_names = [getattr(t, "name", str(t)) for t in ALL_TOOLS]
         return AgentResult(
             reply=(
                 "[Demo mode — model URL not configured]\n"
-                f"I would run the ReAct agent with all tools for: \"{message}\".\n"
-                "Available tools: salesforce_get_case, salesforce_create_case, "
-                "salesforce_get_order, confluence_search, confluence_get_page, "
-                "elasticsearch_semantic_search, elasticsearch_ingest_document."
+                f"I would run the agent with all tools for: \"{message}\".\n"
+                f"Available tools: {', '.join(tool_names)}."
             ),
             tool_steps=[],
             latency_ms=None,
@@ -162,31 +137,43 @@ def invoke_agent(
             session_id=session_id,
         )
 
+    # ── Build messages from history + new user message ────────────────────────
+    # Use last N messages so in-memory session history correlates prompts (id-based)
+    max_history = getattr(settings, "chat_memory_max_messages", 20)
+    messages: List = []
+    for item in history[-max_history:]:
+        if item.role == "user":
+            messages.append(HumanMessage(content=item.content))
+        else:
+            messages.append(AIMessage(content=item.content))
+    messages.append(HumanMessage(content=message))
+
     # ── Live agent invocation ─────────────────────────────────────────────────
     try:
-        # Build conversation context string from history (last 4 turns)
-        context_lines = []
-        for item in history[-4:]:
-            prefix = "User" if item.role == "user" else "Assistant"
-            context_lines.append(f"{prefix}: {item.content}")
-        context = "\n".join(context_lines)
-        full_input = f"{context}\nUser: {message}" if context else message
+        result = agent.invoke({"messages": messages})
 
-        result = executor.invoke({"input": full_input})
-
-        # Extract intermediate tool steps
+        # Extract final reply and tool steps from state messages
+        out_messages = result.get("messages", [])
+        reply = "No response generated."
         tool_steps: List[ToolStep] = []
-        for action, observation in result.get("intermediate_steps", []):
-            if isinstance(action, AgentAction):
-                tool_steps.append(
-                    ToolStep(
-                        tool=action.tool,
-                        input=action.tool_input if isinstance(action.tool_input, dict) else {"input": str(action.tool_input)},
-                        output=str(observation)[:500],  # truncate long outputs
-                    )
-                )
+        tool_call_names: dict = {}  # tool_call_id -> tool name
 
-        reply = result.get("output", "No response generated.")
+        for msg in out_messages:
+            if isinstance(msg, AIMessage):
+                if msg.content:
+                    if isinstance(msg.content, str):
+                        reply = msg.content
+                    elif isinstance(msg.content, list) and msg.content:
+                        part = msg.content[0]
+                        reply = part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                if getattr(msg, "tool_calls", None):
+                    for tc in msg.tool_calls:
+                        tool_call_names[tc.get("id", "")] = tc.get("name", "unknown")
+            elif isinstance(msg, ToolMessage):
+                name = tool_call_names.get(getattr(msg, "tool_call_id", ""), "unknown")
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)[:500]
+                tool_steps.append(ToolStep(tool=name, input={}, output=content))
+
         latency_ms = int((time.perf_counter() - start) * 1000)
         bound_log.info("agent.invoke.done", latency_ms=latency_ms, tool_steps=len(tool_steps))
 
@@ -199,6 +186,5 @@ def invoke_agent(
         )
 
     except Exception as exc:
-        latency_ms = int((time.perf_counter() - start) * 1000)
         bound_log.exception("agent.invoke.error", error=str(exc))
         raise

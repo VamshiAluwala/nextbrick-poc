@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="Nextbrick Agentic AI POC Backend",
+        description="Keysight Agentic AI POC Backend",
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",

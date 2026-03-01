@@ -1,5 +1,5 @@
 # ─── docker-compose.yml ───────────────────────────────────────────────────────
-# Nextbrick Agentic AI POC — two-container compose (alternative to `make run`)
+# Keysight Agentic AI POC — two-container compose (alternative to `make run`)
 #
 # Usage:
 #   make compose-up    →  docker compose up --build -d
@@ -15,7 +15,7 @@ services:
       context: .            # root — Dockerfile at project root
       dockerfile: Dockerfile
       target: runtime       # use the combined runtime stage
-    container_name: nextbrick-app
+    container_name: keysight-app
     restart: unless-stopped
     env_file:
       - ./backend/.env

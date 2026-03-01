@@ -13,7 +13,7 @@
 #     "timestamp":   "2026-02-27T19:45:00Z",
 #     "message":     "Where is my order?",
 #     "reply":       "I found order #12345 ...",
-#     "model":       "qwen2.5-coder:latest",
+#     "model":       "gpt-oss:120b-cloud",
 #     "latency_ms":  320,
 #     "tool_calls":  ["salesforce_order_lookup"],
 #     "citations":   ["Salesforce"]

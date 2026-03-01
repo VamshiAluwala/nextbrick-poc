@@ -18,7 +18,7 @@
 #   "timestamp":   "2026-03-01T05:30:00Z",
 #   "message":     "Where is my order?",
 #   "reply":       "Your order #12345 is shipped ...",
-#   "model":       "qwen2.5-coder:latest",
+#   "model":       "gpt-oss:120b-cloud",
 #   "latency_ms":  320,
 #   "tool_calls":  ["salesforce_get_order"],   <- tool names used
 #   "citations":   []

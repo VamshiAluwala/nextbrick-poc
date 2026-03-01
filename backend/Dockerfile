@@ -6,7 +6,7 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.11-slim AS runtime
-LABEL org.opencontainers.image.title="Nextbrick AI Backend"
+LABEL org.opencontainers.image.title="Keysight AI Backend"
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY app/ ./app/

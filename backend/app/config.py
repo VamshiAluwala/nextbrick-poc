@@ -11,14 +11,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # ── App meta ──────────────────────────────────────────────────────────────
-    app_name: str = "Nextbrick Agentic AI"
+    app_name: str = "Keysight Agentic AI"
     app_version: str = "1.0.0"
     debug: bool = False
     log_level: str = "INFO"
 
     # ── On-prem / local LLM (Ollama / vLLM) ──────────────────────────────────
     onprem_model_url: Optional[str] = None      # e.g. http://localhost:11434
-    onprem_model_name: str = "qwen2.5-coder:latest"
+    onprem_model_name: str = "gpt-oss:120b-cloud"
     onprem_model_api_key: str = "EMPTY"
 
     # Legacy aliases (backwards compat with existing .env)
@@ -33,17 +33,23 @@ class Settings(BaseSettings):
 
     # ── Elasticsearch ─────────────────────────────────────────────────────────
     es_host: str = "http://localhost:9200"
-    es_index: str = "nextbrick-poc"
+    es_index: str = "keysight-poc"
     es_username: Optional[str] = None
     es_password: Optional[str] = None
     es_cloud_id: Optional[str] = None
     es_cloud_api_key: Optional[str] = None
 
-    # ── Salesforce ─────────────────────────────────────────────────────────────
+    # ── Salesforce (OAuth2 client_credentials + Data API) ─────────────────────
+    sf_token_url: Optional[str] = None   # e.g. https://yourorg.my.salesforce.com/services/oauth2/token
+    sf_client_id: Optional[str] = None
+    sf_client_secret: Optional[str] = None
+    sf_api_base_url: Optional[str] = None  # e.g. https://yourorg.my.salesforce.com/services/data/v60.0
+    sf_default_case_account_id: Optional[str] = None  # optional; used when creating cases (default in tool)
+    # Legacy (optional)
     sf_username: Optional[str] = None
     sf_password: Optional[str] = None
     sf_security_token: Optional[str] = None
-    sf_domain: str = "login"             # "login" for prod, "test" for sandbox
+    sf_domain: str = "login"
 
     # ── Confluence ────────────────────────────────────────────────────────────
     confluence_url: Optional[str] = None  # e.g. https://yourorg.atlassian.net
@@ -53,7 +59,11 @@ class Settings(BaseSettings):
 
     # ── Embeddings ────────────────────────────────────────────────────────────
     embedding_model: str = "text-embedding-3-small"
-    es_vector_index: str = "nextbrick-vectors"
+    es_vector_index: str = "keysight-vectors"
+
+    # ── Ollama embeddings + test index (for elasticsearch_ollama_tool) ─────
+    ollama_embedding_model: str = "bge-m3:latest"
+    es_ollama_index: str = "next_elastic_test1"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     frontend_url: str = "http://localhost:8080"
@@ -70,6 +80,10 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.2
     llm_max_retries: int = 3
     llm_timeout_seconds: int = 120
+
+    # ── Agent dynamic model selection ────────────────────────────────────────
+    agent_advanced_message_threshold: int = 10  # use advanced model when messages > this
+    chat_memory_max_messages: int = 20  # in-memory history per session (user+assistant turns)
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -24,7 +24,7 @@ log = structlog.get_logger(__name__)
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = (
-    "You are a helpful enterprise AI assistant for the Nextbrick Agentic AI POC. "
+    "You are a helpful enterprise AI assistant for the Keysight Agentic AI POC. "
     "You have access to data from Salesforce (cases, orders), Confluence (knowledge articles), "
     "AEM DAM (product manuals, datasheets), and Elasticsearch (semantic search). "
     "Answer concisely with citations where possible. "
@@ -50,33 +50,37 @@ def _normalize_base_url(raw: str) -> str:
 
 # ── LLM Factory ───────────────────────────────────────────────────────────────
 
-def build_llm() -> Optional[ChatOpenAI]:
+def build_llm(profile: str = "default") -> Optional[ChatOpenAI]:
     """
     Return a configured ChatOpenAI client or None if no model URL is set.
-    The client is OpenAI-API-compatible and works with Ollama, vLLM, etc.
+    profile "default" uses onprem/effective model; "advanced" uses cloud model if set, else same as default.
     """
-    raw_url = settings.effective_model_url
+    if profile == "advanced" and settings.cloud_model_url and settings.cloud_model_name:
+        raw_url = settings.cloud_model_url
+        model_name = settings.cloud_model_name
+        api_key = settings.cloud_model_api_key or "EMPTY"
+    else:
+        raw_url = settings.effective_model_url
+        model_name = settings.effective_model_name
+        api_key = settings.effective_api_key
     if not raw_url:
-        log.warning("llm_service.no_url_configured")
+        log.warning("llm_service.no_url_configured", profile=profile)
         return None
 
     base_url = _normalize_base_url(raw_url)
-    model_name = settings.effective_model_name
-    api_key = settings.effective_api_key
-
     log.info(
         "llm_service.build_llm",
+        profile=profile,
         base_url=base_url,
         model_name=model_name,
     )
-
     return ChatOpenAI(
         model=model_name,
         temperature=settings.llm_temperature,
         openai_api_key=api_key,
         openai_api_base=base_url,
         request_timeout=settings.llm_timeout_seconds,
-        max_retries=0,  # retries handled by tenacity below
+        max_retries=0,
     )
 
 

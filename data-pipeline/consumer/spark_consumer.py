@@ -58,7 +58,7 @@ def build_spark() -> SparkSession:
     """Create a local SparkSession with the Kafka connector."""
     return (
         SparkSession.builder
-        .appName("nextbrick-chat-events")
+        .appName("keysight-chat-events")
         .master("local[*]")
         # Kafka connector — pulled automatically by Spark's package resolver
         .config(

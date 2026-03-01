@@ -12,7 +12,7 @@
 #   ES_HOST         = http://localhost:9200
 #   ES_USERNAME     = elastic
 #   ES_PASSWORD     = changeme
-#   ES_VECTOR_INDEX = nextbrick-vectors
+#   ES_VECTOR_INDEX = keysight-vectors
 #   EMBEDDING_MODEL = BAAI/bge-m3       ← default
 # ─────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
@@ -84,7 +84,7 @@ def _get_vector_store():
         es_client = Elasticsearch(**es_kwargs)
 
         _vector_store = ElasticsearchStore(
-            es_connection=es_client,
+            client=es_client,
             index_name=settings.es_vector_index,
             embedding=embeddings,
         )
@@ -124,7 +124,7 @@ def _seed_if_empty(store) -> None:
         ),
         Document(
             page_content="Calibration certificates are issued annually. "
-                         "Log into the Nextbrick portal → Assets → Calibration → Request Certificate. "
+                         "Log into the Keysight portal → Assets → Calibration → Request Certificate. "
                          "PDF delivered by email within 3 business days.",
             metadata={"source": "confluence", "title": "Calibration Certificate FAQ"},
         ),

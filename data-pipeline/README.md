@@ -2,7 +2,7 @@
 # data-pipeline/README.md
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Nextbrick Chat Events Pipeline
+# Keysight Chat Events Pipeline
 
 Real-time Kafka + Spark pipeline that logs every AI chat query & response.
 
@@ -33,7 +33,7 @@ FastAPI /api/chat
   "timestamp":  "2026-02-27T19:45:00Z",
   "message":    "Where is my order?",
   "reply":      "I found order #12345 ...",
-  "model":      "qwen2.5-coder:latest",
+  "model":      "gpt-oss:120b-cloud",
   "latency_ms": 320,
   "tool_calls": ["salesforce_order_lookup"],
   "citations":  ["Salesforce"]

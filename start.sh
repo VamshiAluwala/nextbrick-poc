@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# start.sh — Nextbrick Agentic AI POC unified dev launcher
+# start.sh — Keysight Agentic AI POC unified dev launcher
 #
 # Usage:   ./start.sh
 # Stops:   Ctrl-C  (kills both servers gracefully)
@@ -11,16 +11,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
-FRONTEND_DIR="$SCRIPT_DIR/nextbrick-ai-assistant-main"
+FRONTEND_DIR="$SCRIPT_DIR/keysight-ai-assistant-main"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-log()  { echo -e "${CYAN}[nextbrick]${NC} $*"; }
+log()  { echo -e "${CYAN}[keysight]${NC} $*"; }
 ok()   { echo -e "${GREEN}[✓]${NC} $*"; }
 warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 err()  { echo -e "${RED}[✗]${NC} $*"; }
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
-log "Nextbrick Agentic AI POC — starting all services..."
+log "Keysight Agentic AI POC — starting all services..."
 
 if [ ! -f "$BACKEND_DIR/venv/bin/uvicorn" ]; then
   warn "Backend venv not found. Creating and installing deps..."
@@ -71,7 +71,7 @@ ok "Frontend started (PID $FRONTEND_PID)"
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  Nextbrick Agentic AI POC is running                 ║${NC}"
+echo -e "${GREEN}║  Keysight Agentic AI POC is running                 ║${NC}"
 echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${GREEN}║  Frontend  →  http://localhost:8080                  ║${NC}"
 echo -e "${GREEN}║  Backend   →  http://localhost:8000                  ║${NC}"

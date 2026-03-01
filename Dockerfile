@@ -3,16 +3,16 @@
 # Runs BOTH the FastAPI backend AND the Vite/React frontend in one image
 # using supervisord as the process manager.
 #
-# Build:   docker build -t nextbrick-ai .
-# Run:     docker run -p 8000:8000 -p 80:80 --env-file backend/.env nextbrick-ai
+# Build:   docker build -t keysight-ai .
+# Run:     docker run -p 8000:8000 -p 80:80 --env-file backend/.env keysight-ai
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build React frontend ──────────────────────────────────────────── 
 FROM node:20-alpine AS frontend-build
 WORKDIR /frontend
-COPY nextbrick-ai-assistant-main/package*.json ./
+COPY keysight-ai-assistant-main/package*.json ./
 RUN npm ci --prefer-offline
-COPY nextbrick-ai-assistant-main/ ./
+COPY keysight-ai-assistant-main/ ./
 RUN npm run build
 
 # ── Stage 2: Build Python backend wheels ──────────────────────────────────────
@@ -25,7 +25,7 @@ RUN pip install --upgrade pip \
 # ── Stage 3: Combined runtime image ───────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-LABEL org.opencontainers.image.title="Nextbrick Agentic AI POC"
+LABEL org.opencontainers.image.title="Keysight Agentic AI POC"
 LABEL org.opencontainers.image.description="Combined FastAPI backend + nginx frontend"
 
 # Install nginx + supervisord in the same image
@@ -50,7 +50,7 @@ COPY --from=frontend-build /frontend/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/sites-available/default
 
 # ── supervisord config — boots both processes ──────────────────────────────────
-COPY docker/supervisord.conf /etc/supervisor/conf.d/nextbrick.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/keysight.conf
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
