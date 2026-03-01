@@ -13,6 +13,7 @@ from app.config import settings
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.llm_service import build_llm, build_messages, invoke_llm
 from app.services.tool_service import infer_tool_calls
+from app.services.kafka_service import publish_chat_event
 from app.middleware.metrics import metrics_store
 
 log = structlog.get_logger(__name__)
@@ -41,11 +42,21 @@ def chat(req: ChatRequest) -> ChatResponse:
     llm = build_llm()
     if llm is None:
         bound_log.warning("chat.demo_mode")
+        demo_reply = (
+            f"[Demo mode — model URL not configured] "
+            f"I would search indexed sources and invoke tools for: \"{req.message}\"."
+        )
+        publish_chat_event(
+            session_id=session_id,
+            message=req.message,
+            reply=demo_reply,
+            model=model_name,
+            latency_ms=None,
+            tool_calls=tool_calls,
+            citations=_DEMO_CITATIONS,
+        )
         return ChatResponse(
-            reply=(
-                f"[Demo mode — model URL not configured] "
-                f"I would search indexed sources and invoke tools for: \"{req.message}\"."
-            ),
+            reply=demo_reply,
             citations=_DEMO_CITATIONS,
             tool_calls=tool_calls,
             latency_ms=None,
@@ -71,6 +82,17 @@ def chat(req: ChatRequest) -> ChatResponse:
 
     # Record metrics
     metrics_store.record(latency_ms=latency_ms, tool_calls=len(tool_calls))
+
+    # Publish to Kafka (fire-and-forget)
+    publish_chat_event(
+        session_id=session_id,
+        message=req.message,
+        reply=reply_text or "",
+        model=model_name,
+        latency_ms=latency_ms,
+        tool_calls=tool_calls,
+        citations=[],
+    )
 
     return ChatResponse(
         reply=reply_text or "No response from model.",

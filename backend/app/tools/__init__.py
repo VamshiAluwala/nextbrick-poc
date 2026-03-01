@@ -1,8 +1,5 @@
 # backend/app/tools/__init__.py
-# ─────────────────────────────────────────────────────────────────────────────
-# Aggregates every LangChain @tool into a single ALL_TOOLS list that the
-# agent service binds to the ReAct agent.
-# ─────────────────────────────────────────────────────────────────────────────
+# Aggregates all LangChain tools for the ReAct agent.
 from app.tools.salesforce_tool import (
     salesforce_get_case,
     salesforce_create_case,
@@ -25,7 +22,7 @@ ALL_TOOLS = [
     # Confluence
     confluence_search,
     confluence_get_page,
-    # Elasticsearch / Vector Search
+    # Elasticsearch — BGE-M3 semantic search
     elasticsearch_semantic_search,
     elasticsearch_ingest_document,
 ]

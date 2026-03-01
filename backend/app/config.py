@@ -39,9 +39,32 @@ class Settings(BaseSettings):
     es_cloud_id: Optional[str] = None
     es_cloud_api_key: Optional[str] = None
 
+    # ── Salesforce ─────────────────────────────────────────────────────────────
+    sf_username: Optional[str] = None
+    sf_password: Optional[str] = None
+    sf_security_token: Optional[str] = None
+    sf_domain: str = "login"             # "login" for prod, "test" for sandbox
+
+    # ── Confluence ────────────────────────────────────────────────────────────
+    confluence_url: Optional[str] = None  # e.g. https://yourorg.atlassian.net
+    confluence_username: Optional[str] = None
+    confluence_api_token: Optional[str] = None
+    confluence_space_key: str = "~"
+
+    # ── Embeddings ────────────────────────────────────────────────────────────
+    embedding_model: str = "text-embedding-3-small"
+    es_vector_index: str = "nextbrick-vectors"
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     frontend_url: str = "http://localhost:8080"
     cors_origins: list[str] = ["*"]
+
+    # ── Kafka ─────────────────────────────────────────────────────────────────
+    kafka_enabled: bool = True
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_topic_chat_events: str = "chat.events"
+    kafka_topic_agent_events: str = "agent.events"
+
 
     # ── LLM behaviour ─────────────────────────────────────────────────────────
     llm_temperature: float = 0.2

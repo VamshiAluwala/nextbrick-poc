@@ -5,6 +5,12 @@ pydantic-settings
 langchain
 langchain-openai
 langchain-core
+langchain-community
+langchain-elasticsearch
+langchain-text-splitters
+langchain-huggingface
+sentence-transformers
+openai
 structlog
 httpx
 tenacity
