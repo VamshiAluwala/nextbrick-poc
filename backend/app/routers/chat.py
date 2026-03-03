@@ -3,11 +3,13 @@
 # Frontend expects JSON, not SSE.
 from __future__ import annotations
 import uuid
+import time
 import structlog
 
 from fastapi import APIRouter, HTTPException, status
 from app.models.chat import ChatRequest, ChatResponse, ToolCallResult
 from app.services import agent_service
+from app.services.manual_fastpath import build_manual_fastpath_reply
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -36,12 +38,29 @@ def chat(req: ChatRequest) -> ChatResponse:
     bound_log = log.bind(session_id=session_id, message_preview=req.message[:50])
     bound_log.info("chat.request")
 
+    started = time.perf_counter()
+    fast_reply = build_manual_fastpath_reply(req.message)
+    if fast_reply:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        return ChatResponse(
+            reply=fast_reply,
+            citations=["manual_fastpath"],
+            tool_calls=[],
+            thinking_steps=["Detected known manual lookup pattern; served deterministic fast-path response."],
+            latency_ms=elapsed_ms,
+            input_tokens=None,
+            output_tokens=None,
+            model="manual-fastpath-v1",
+            session_id=session_id,
+        )
+
     try:
         result = agent_service.invoke_agent(
             message=req.message,
             history=req.history,
             session_id=session_id,
             data_source=req.data_source,
+            language=req.language,
         )
     except Exception as exc:
         bound_log.exception("chat.agent_error", error=str(exc))

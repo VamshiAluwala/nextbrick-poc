@@ -8,6 +8,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
 import uuid
+import time
 import structlog
 
 from fastapi import APIRouter, HTTPException, status
@@ -18,6 +19,7 @@ from app.models.chat import MessageItem
 from app.services.agent_service import invoke_agent, ToolStep
 from app.services.kafka_service import publish_agent_event
 from app.middleware.metrics import metrics_store
+from app.services.manual_fastpath import build_manual_fastpath_reply
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["agent"])
@@ -69,6 +71,18 @@ def agent(req: AgentRequest) -> AgentResponse:
     session_id = req.session_id or str(uuid.uuid4())[:8]
     bound_log = log.bind(session_id=session_id, preview=req.message[:60])
     bound_log.info("agent.request")
+
+    started = time.perf_counter()
+    fast_reply = build_manual_fastpath_reply(req.message)
+    if fast_reply:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        return AgentResponse(
+            reply=fast_reply,
+            tool_steps=[],
+            latency_ms=elapsed_ms,
+            model="manual-fastpath-v1",
+            session_id=session_id,
+        )
 
     try:
         result = invoke_agent(

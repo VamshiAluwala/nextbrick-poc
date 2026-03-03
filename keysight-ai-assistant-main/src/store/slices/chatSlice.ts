@@ -107,6 +107,7 @@ interface SendMessageArg {
     message: string;
     modelProfile?: string;
     dataSource?: string;
+    language?: string;
 }
 
 interface ChatApiResponse {
@@ -126,7 +127,7 @@ export const sendMessage = createAsyncThunk<
     { rejectValue: string }
 >(
     "chat/sendMessage",
-    async ({ sessionId, message, modelProfile, dataSource }, { getState, rejectWithValue, dispatch, requestId }) => {
+    async ({ sessionId, message, modelProfile, dataSource, language }, { getState, rejectWithValue, dispatch, requestId }) => {
         // Build history from current session state AT TIME OF CALL
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const state = (getState() as any).chat as ChatState;
@@ -151,6 +152,7 @@ export const sendMessage = createAsyncThunk<
                     session_id: sessionId,
                     model_profile: modelProfile,
                     data_source: dataSource,
+                    language,
                 }),
             });
             if (!res.ok) {

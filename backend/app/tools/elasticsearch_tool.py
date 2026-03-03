@@ -4,15 +4,20 @@
 # both keyword search and semantic search via BGE-M3 embeddings.
 # ─────────────────────────────────────────────────────────────────────────────
 from __future__ import annotations
+from pathlib import Path
 import re
 import structlog
-from typing import Optional
+from typing import Optional, Any
 from langchain_core.tools import tool
 
 log = structlog.get_logger(__name__)
 
 _embeddings = None
 _vector_store = None
+_DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
+_OFFICIAL_MANUAL_URLS = {
+    "u1610a_u1620a handheld digital oscilloscope.pdf": "https://www.keysight.com/us/en/assets/9018-03621/user-manuals/9018-03621.pdf",
+}
 
 
 def _get_embeddings():
@@ -79,6 +84,168 @@ def _extract_id_tokens(query: str) -> list[str]:
         elif any(ch.isdigit() for ch in t) and len(t) >= 5:
             ids.append(t)
     return ids
+
+
+def _extract_model_tokens(query: str) -> list[str]:
+    """Extract probable product model tokens, e.g. U1610A, N9030A, DSOX1202A."""
+    if not query:
+        return []
+    # Keep uppercase model codes with trailing letter optional.
+    return re.findall(r"\b[A-Z]{1,4}\d{3,5}[A-Z]?\b", query.upper())
+
+
+def _local_pdf_fallback_websearch(query: str, size: int, reason: str = "") -> Optional[dict]:
+    """
+    Fallback for manual lookup when asset index is unavailable.
+    Returns websearch-like payload with expected fields in _source:
+    TITLE, DESCRIPTION, ASSET_PATH, CONTENT_TYPE_NAME.
+    """
+    if not _DOCS_DIR.exists():
+        return None
+
+    model_tokens = _extract_model_tokens(query)
+    query_l = (query or "").lower()
+
+    candidates: list[tuple[int, Path]] = []
+    for pdf_path in _DOCS_DIR.glob("*.pdf"):
+        name_l = pdf_path.name.lower()
+        score = 0
+
+        for model in model_tokens:
+            if model.lower() in name_l:
+                score += 100
+
+        if "manual" in name_l or "user" in name_l or "guide" in name_l:
+            score += 10
+
+        if query_l and any(tok in name_l for tok in query_l.split() if len(tok) >= 5):
+            score += 5
+
+        if score > 0:
+            candidates.append((score, pdf_path))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    top = candidates[: max(1, size)]
+
+    fallback_hits = []
+    for score, pdf in top:
+        title = pdf.stem
+        normalized = re.sub(r"\s+\(\d+\)\.pdf$", ".pdf", pdf.name.strip(), flags=re.IGNORECASE)
+        official_url = _OFFICIAL_MANUAL_URLS.get(pdf.name.lower()) or _OFFICIAL_MANUAL_URLS.get(normalized.lower())
+        asset_path = official_url or str(pdf)
+
+        description = (
+            "Manual found via local docs fallback. "
+            "Use ASSET_PATH as the direct manual link; LOCAL_PATH is the local file path."
+        )
+        if reason:
+            description = f"{description} Fallback reason: {reason}"
+
+        fallback_hits.append(
+            {
+                "_id": f"local-doc:{pdf.name}",
+                "_score": float(score),
+                "_source": {
+                    "TITLE": title,
+                    "DESCRIPTION": description,
+                    "ASSET_PATH": asset_path,
+                    "CONTENT_TYPE_NAME": "PDF",
+                    "LOCAL_PATH": str(pdf),
+                },
+            }
+        )
+
+    return {
+        "index": "local_docs_fallback",
+        "total": len(fallback_hits),
+        "hits": fallback_hits,
+        "aggregations": {},
+    }
+
+
+def _pick_best_index_for_websearch(es: Any, explicit_index: Optional[str], query: str) -> str:
+    """Choose the best index if user does not explicitly provide one."""
+    from app.config import settings
+    if explicit_index:
+        return explicit_index
+
+    query_l = (query or "").lower()
+    default_index = getattr(settings, "es_data_index", "next_elastic_test1")
+
+    # Heuristic routing by intent.
+    if any(k in query_l for k in ("manual", "datasheet", "pdf", "documentation", "user guide")):
+        candidate = "asset_v2"
+        try:
+            if es.indices.exists(index=candidate):
+                return candidate
+        except Exception:
+            pass
+
+    # Cases, tickets, support records, orders, policy-like content in this project live in data index.
+    return default_index
+
+
+def _build_websearch_body(query: str, size: int, aggs: Optional[dict]) -> dict:
+    """
+    Build an ES query body supporting:
+    - full-text relevance search
+    - 'last N documents' style queries
+    - monthly sales breakdown (date_histogram + sum)
+    - explicit external aggregations via `aggs`
+    """
+    query_l = (query or "").lower()
+    requested_size = max(1, min(size, 100))
+
+    # "show me the last 5 documents" style.
+    m_last = re.search(r"\blast\s+(\d{1,3})\b", query_l)
+    if m_last:
+        requested_size = max(1, min(int(m_last.group(1)), 100))
+
+    body: dict = {
+        "size": requested_size,
+        "track_total_hits": True,
+        "query": {
+            "multi_match": {
+                "query": query,
+                "fields": ["*"],
+                "type": "best_fields",
+            }
+        },
+    }
+
+    if "last" in query_l and ("document" in query_l or "record" in query_l):
+        body["sort"] = [{"CREATEDDATE": {"order": "desc", "unmapped_type": "date"}}]
+
+    # "sales ... break down by month" style analytical query.
+    if (
+        "sales" in query_l
+        and ("break down by month" in query_l or "broken down by month" in query_l or "by month" in query_l)
+    ):
+        body["size"] = 0
+        body["query"] = {"match_all": {}}
+        body["aggs"] = {
+            "sales_by_month": {
+                "date_histogram": {
+                    "field": "CREATEDDATE",
+                    "calendar_interval": "month",
+                    "min_doc_count": 0,
+                },
+                "aggs": {
+                    "sales_total": {
+                        "sum": {"field": "ORDER_AMOUNT_USD__C"}
+                    }
+                },
+            }
+        }
+        return body
+
+    if aggs:
+        body["aggs"] = aggs
+
+    return body
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -316,3 +483,69 @@ def elasticsearch_ingest_document(title: str, content: str, source: str = "manua
     except Exception as e:
         log.error("elasticsearch.ingest.error", error=str(e))
         return {"error": str(e), "indexed": False}
+
+
+@tool
+def elasticsearch_websearch(
+    query: str,
+    index: Optional[str] = None,
+    size: int = 10,
+    aggs: Optional[dict] = None,
+) -> dict:
+    """
+    A powerful tool for searching and analysing data within your Elasticsearch cluster.
+    It supports both full-text relevance searches and structured analytical queries.
+
+    Use this tool for any query that involves finding documents, counting, aggregating,
+    or summarising data from a known index.
+
+    Examples:
+    - "find articles about serverless architecture"
+    - "search for support tickets mentioning 'billing issue' or 'refund request'"
+    - "what is our policy on parental leave?"
+    - "list all products where the category is 'electronics'"
+    - "show me the last 5 documents from that index"
+    - "show me the sales over the last year broken down by month"
+
+    Notes:
+    - The `index` parameter can be used to specify which index to search against.
+      If not provided, the tool selects the best index heuristically.
+    - It is perfectly fine not to specify `index`. Only set it when you already
+      know the index and fields you want to search on, e.g. user explicitly specified it.
+    """
+
+    log.info("elasticsearch.websearch", query=query, index=index, size=size)
+    try:
+        es = _get_es_client()
+        target_index = _pick_best_index_for_websearch(es=es, explicit_index=index, query=query)
+        body = _build_websearch_body(query=query, size=size, aggs=aggs)
+
+        res = es.search(index=target_index, body=body)
+        hits = res.get("hits", {}).get("hits", [])
+
+        # Special fallback for manual lookup flow when asset_v2 has no data.
+        if not hits and target_index == "asset_v2":
+            fallback = _local_pdf_fallback_websearch(query=query, size=size, reason="asset_v2 returned 0 hits")
+            if fallback:
+                return fallback
+
+        return {
+            "index": target_index,
+            "total": res.get("hits", {}).get("total", {}).get("value", len(hits)),
+            "hits": [
+                {
+                    "_id": h.get("_id"),
+                    "_score": h.get("_score"),
+                    "_source": h.get("_source", {}),
+                }
+                for h in hits
+            ],
+            "aggregations": res.get("aggregations", {}),
+        }
+    except Exception as e:
+        log.error("elasticsearch.websearch.error", error=str(e))
+        if (index or "").lower() == "asset_v2":
+            fallback = _local_pdf_fallback_websearch(query=query, size=size, reason=str(e))
+            if fallback:
+                return fallback
+        return {"error": str(e), "query": query}

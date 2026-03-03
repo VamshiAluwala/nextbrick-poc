@@ -29,6 +29,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="Optional preferred data source (e.g. 'auto', 'salesforce', 'elasticsearch', 'aem', 'confluence', 'email', 'snowflake').",
     )
+    language: Optional[str] = Field(
+        default=None,
+        description="Optional UI language code (e.g. 'en', 'de', 'es', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'fr').",
+    )
 
 
 # ── Outbound ──────────────────────────────────────────────────────────────────

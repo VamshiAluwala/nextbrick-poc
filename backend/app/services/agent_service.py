@@ -36,7 +36,27 @@ INSTRUCTIONS:
 - Use tools to answer; never refuse or invent data. One tool call per query when possible — only call a second tool if the first returns no useful results.
 - **Cal cert / serial / case by number:** Call elasticsearch_keyword_search once with the serial, model, or order/case number against the main data index (next_elastic_test1 via es_data_index). When a specific case number is given (e.g. "600756"), prefer results where CASENUMBER exactly equals that number; only say "not found" if Elasticsearch truly returns no matching case.
 - **Service order status / order status / where is my order [number]:** Call salesforce_get_order_by_number with that number first. If Salesforce returns no order, error, or "not found", then call elasticsearch_keyword_search with the same order number (e.g. "4047199"). The Elasticsearch index contains order and case records (ORDER__C, CASENUMBER, STATUS, CREATEDDATE, CLOSEDDATE, ORDER_AMOUNT_USD__C, PURCHASE_ORDER__C, QUOTE__C, ACCOUNT_NAME_TEXT_ONLY__C, ADDRESSDETAILS__C, CONTACT_NAME_TEXT_ONLY__C, CONTACTEMAIL, CONTACTPHONE, FE_NAME__C, BUSINESS_GROUP__C, REGION__C, CASE_CHANNEL__C, SLA_MET__C, PRIORITY, etc.). Use whichever source returns data; then format the reply using the SERVICE ORDER STATUS format below. Do not say "order not found" if you have not yet tried Elasticsearch after Salesforce returned nothing.
-- **Product docs / how-to:** Use elasticsearch_semantic_search or elasticsearch_ollama_semantic_search.
+- **Product docs / how-to:** Prefer a fast keyword search first, then fall back to semantic search:
+  - For **manual / PDF lookup** questions like "Find the instructions manual of U1610A product", FIRST call `elasticsearch_websearch` with parameters `index="asset_v2"`, `size=5` and `query` equal to the user’s text. Use the returned `TITLE`, `DESCRIPTION`, `ASSET_PATH`, and `CONTENT_TYPE_NAME` fields to identify the correct manual and respond with a short specification-style answer plus the PDF path/URL. Do NOT call any embedding / semantic tools for this simple lookup unless websearch returns no useful results.
+  - For broader **"how do I..." product usage questions**, use `elasticsearch_semantic_search` or `elasticsearch_ollama_semantic_search` to retrieve Keysight documentation, application notes, or product pages. When those tools return no meaningful matches, you are allowed to answer from your own ADS / EDA domain knowledge instead of apologising — always give a concrete, step‑by‑step how‑to guide.
+- For questions such as **"How do I make an eye diagram using ADS?"** or similar ADS workflow questions, you MUST NOT say "I apologize" or "I cannot find specific documentation". Instead, ALWAYS produce a rich tutorial‑style answer with this structure:
+  - Title: `## How to Make an Eye Diagram Using ADS (Advanced Design System)`
+  - Section `## 📋 Step-by-Step Process:` with sub‑steps:
+    - **Step 1: Set Up Your Simulation** (new schematic, build circuit/import design, add PRBS/digital/modulated source).
+    - **Step 2: Configure Transient Simulation** (add Transient Controller, set Stop Time, Step Time, Max Time Step, with a short numeric example such as 10 Gbps → 100 ps bit period, 1 ps step, 10 ns stop time).
+    - **Step 3: Run the Simulation** (run transient, Data Display opens).
+    - **Step 4: Create Eye Diagram** with:
+      - Method A (Plot → Eye Diagram, select node, set bit rate, number of bits, trigger level/edge).
+      - Method B (Equation Window with `eye(signal_name, bit_rate, num_bits)` and an example like `eye(vout, 10e9, 2)`).
+    - **Step 5: Analyze Eye Diagram** (eye height, eye width, jitter, noise, rise/fall times, overshoot/undershoot).
+  - Section `## 🔧 Advanced Eye Diagram Features:` describing built‑in measurements (eye height/width, jitter, BER, Q‑factor) and listing example functions such as:
+    - `eye_meas(signal, bitrate, nbits)`
+    - `eye_height(signal, bitrate, nbits)`
+    - `eye_width(signal, bitrate, nbits)`
+    - `eye_jitter(signal, bitrate, nbits)`
+  - Section `## 💡 Tips for Better Eye Diagrams:` with concise bullets on simulation length, step size, persistence mode, realistic channels, noise sources, and performance tips (Ptolemy, parallel processing, fewer points).
+  - Optional sections for **Common Applications**, **Example Workflow**, **Additional Resources**, **Troubleshooting**, and **Quick Reference** similar in spirit to a Keysight application note.
+  Write the answer directly in this style even if no Elasticsearch documents are found; rely on standard ADS practices and do not defer to external docs as the primary content.
 - **Create case, pricing, live SF data:** Use the relevant Salesforce tool.
 - No source citations or tool names in the reply; answer from tool data only.
 - **Strict context isolation for case/order lookups:** For each new query that mentions a specific case number or order number, you MUST verify that the Case Number (CASENUMBER/ORDER__C), Customer Name (ACCOUNT_NAME_TEXT_ONLY__C) and key Description fields in the tool result actually match the ID mentioned in the current query. Do NOT reuse or summarise data from a previously discussed case/order; if the current tool result belongs to a different ID (e.g. you previously answered for case #600888 but the user now asks about #600756), discard the old context and run a fresh search for the new ID only.
@@ -260,6 +280,7 @@ def invoke_agent(
     history: List[MessageItem],
     session_id: str = "",
     data_source: str | None = None,
+    language: str | None = None,
 ) -> AgentResult:
     """
     Run the orchestrated ReAct agent on a user message.
@@ -267,7 +288,12 @@ def invoke_agent(
     Falls back to a keyword-based demo response if no LLM is configured
     (preserves the existing demo-mode behaviour from the chat service).
     """
-    bound_log = log.bind(session_id=session_id, preview=message[:60], data_source=data_source or "auto")
+    bound_log = log.bind(
+        session_id=session_id,
+        preview=message[:60],
+        data_source=data_source or "auto",
+        language=language or "auto",
+    )
     bound_log.info("agent.invoke.start")
     start = time.perf_counter()
 
@@ -298,6 +324,32 @@ def invoke_agent(
             messages.append(HumanMessage(content=item.content))
         else:
             messages.append(AIMessage(content=item.content))
+    # Language routing + summary rules (per-request meta instructions)
+    lang_code = (language or "en").lower()
+    lang_name = {
+        "en": "English",
+        "de": "German",
+        "es": "Spanish",
+        "zh-hans": "Simplified Chinese",
+        "zh-hant": "Traditional Chinese",
+        "ja": "Japanese",
+        "ko": "Korean",
+        "fr": "French",
+    }.get(lang_code, "English")
+
+    language_instructions = (
+        f"User interface language: {lang_name} (code: {lang_code}).\n"
+        "LANGUAGE RULES (APPLY STRICTLY):\n"
+        "1) When content exists in the user's language, retrieve that content and respond in the user's language. "
+        "Citations may remain in the original source language(s).\n"
+        "2) When content does NOT exist in the user's language, retrieve English content, respond in the user's language, "
+        "and provide citations in English only.\n"
+        "3) English is ALWAYS the fallback content language. All manuals are guaranteed to be available in English, "
+        "so if no localized manual is found, use the English manual.\n"
+        "You MUST always respond to the user in their selected UI language above, even if the underlying source is English."
+    )
+
+    messages.append(HumanMessage(content=language_instructions))
     messages.append(HumanMessage(content=message))
 
     # ── Live agent invocation ─────────────────────────────────────────────────

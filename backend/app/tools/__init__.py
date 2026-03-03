@@ -18,6 +18,7 @@ from app.tools.elasticsearch_tool import (
     elasticsearch_keyword_search,
     elasticsearch_semantic_search,
     elasticsearch_ingest_document,
+    elasticsearch_websearch,
 )
 from app.tools.elasticsearch_ollama_tool import (
     elasticsearch_ollama_semantic_search,
@@ -38,6 +39,7 @@ ALL_TOOLS = [
     confluence_search,
     confluence_get_page,
     elasticsearch_keyword_search,
+    elasticsearch_websearch,
     # Elasticsearch — BGE-M3 semantic search (HuggingFace)
     elasticsearch_semantic_search,
     elasticsearch_ingest_document,

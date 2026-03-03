@@ -145,6 +145,44 @@ make run
 
 ---
 
+## 7.1 — Expose with ngrok (optional)
+
+The app is built so **one ngrok tunnel on the frontend port** is enough: Vite proxies `/api` to the backend (see `vite.config.ts` → `proxy: { "/api": "http://localhost:8000" }`), so the public URL serves both UI and API.
+
+**1. Start the app (if not already running):**
+
+```bash
+make run
+```
+
+**2. In another terminal, expose the frontend (port 8080):**
+
+```bash
+ngrok http 8080
+```
+
+Use the HTTPS URL ngrok prints (e.g. `https://abc123.ngrok-free.app`) in the browser. No code or env changes needed; CORS is permissive and the proxy handles `/api` → backend.
+
+**Using a reserved ngrok domain** (e.g. `nextbrick.com.ngrok.dev`):
+
+```bash
+# Start app with ngrok-friendly host
+make run-ngrok
+
+# In another terminal, bind to your reserved domain
+ngrok http 8080 --domain=nextbrick.com.ngrok.dev
+```
+
+**Expose only the backend** (e.g. for API-only access from another app):
+
+```bash
+ngrok http 8000
+```
+
+Then the API is at `https://<your-subdomain>.ngrok-free.app` (e.g. `https://xxx.ngrok-free.app/api/health`, `/api/chat`). The React app would need to call this base URL instead of relative `/api` if the UI is served from elsewhere.
+
+---
+
 ## 8 — (Optional) Start Kafka + Spark pipeline
 
 Kafka streams every chat and agent response for real-time analytics.

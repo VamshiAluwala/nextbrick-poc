@@ -1,5 +1,6 @@
 // ─── components/assistant/Navbar.tsx ─────────────────────────────────────────
 // Top sticky navigation bar — Keysight brand style
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   Cpu,
@@ -29,6 +30,27 @@ const NAV_ITEMS = ["Products", "Solutions", "Learn", "Buy", "Support"];
 const Navbar = () => {
   const modelName = useAppSelector((s) => s.model.name);
   const configured = useAppSelector((s) => s.model.configured);
+
+  const [language, setLanguage] = useState<string>("en");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem("keysight.language");
+      if (stored) setLanguage(stored);
+    }
+  }, []);
+
+  const languageLabel =
+    {
+      en: "English",
+      de: "German",
+      es: "Spanish",
+      "zh-Hans": "简体中文",
+      "zh-Hant": "繁體中文",
+      ja: "日本語",
+      ko: "한국어",
+      fr: "Français",
+    }[language] || "English";
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
@@ -187,9 +209,46 @@ const Navbar = () => {
           <Button variant="outline" size="sm" className="rounded-full px-4">
             Contact Us
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground h-8 w-8">
-            <Globe className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground h-8 px-3 gap-1 rounded-full"
+              >
+                <Globe className="h-4 w-4" />
+                <span className="hidden text-xs sm:inline">{languageLabel}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuLabel className="text-[11px]">Language</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {[
+                { id: "en", label: "English" },
+                { id: "de", label: "German" },
+                { id: "es", label: "Spanish" },
+                { id: "zh-Hans", label: "Simplified Chinese" },
+                { id: "zh-Hant", label: "Traditional Chinese" },
+                { id: "ja", label: "Japanese" },
+                { id: "ko", label: "Korean" },
+                { id: "fr", label: "French" },
+              ].map((lang) => (
+                <DropdownMenuItem
+                  key={lang.id}
+                  className="text-[11px]"
+                  onClick={() => {
+                    setLanguage(lang.id);
+                    if (typeof window !== "undefined") {
+                      window.localStorage.setItem("keysight.language", lang.id);
+                    }
+                  }}
+                >
+                  {lang.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="icon" className="text-muted-foreground h-8 w-8">
             <ShoppingCart className="h-4 w-4" />
           </Button>

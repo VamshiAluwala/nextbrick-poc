@@ -59,6 +59,18 @@ const MODEL_OPTIONS: ModelOption[] = [
   { id: "grok-4", label: "Grok 4", group: "cloud" },
 ];
 
+// ── Language options ──────────────────────────────────────────────────────────
+const LANGUAGE_OPTIONS = [
+  { id: "en", label: "English" },
+  { id: "de", label: "German" },
+  { id: "es", label: "Spanish" },
+  { id: "zh-Hans", label: "Simplified Chinese" },
+  { id: "zh-Hant", label: "Traditional Chinese" },
+  { id: "ja", label: "Japanese" },
+  { id: "ko", label: "Korean" },
+  { id: "fr", label: "French" },
+];
+
 // ── Suggested prompts ─────────────────────────────────────────────────────────
 const SUGGESTED_PROMPTS = [
   { text: "Where is my order?", icon: "📦", category: "Salesforce" },
@@ -103,6 +115,12 @@ export default function ChatPanel() {
     MODEL_OPTIONS[0]?.id ?? "gpt-oss:120b-cloud",
   );
   const [selectedSource, setSelectedSource] = useState<string>("auto");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("keysight.language") || "en";
+    }
+    return "en";
+  });
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isLoading = chatStatus === "sending";
@@ -140,12 +158,16 @@ export default function ChatPanel() {
     const text = inputValue.trim();
     if (!text || isLoading) return;
     setInputValue("");
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("keysight.language", selectedLanguage);
+    }
     dispatch(
       sendMessage({
         sessionId: activeId,
         message: text,
         modelProfile: selectedModelProfile,
         dataSource: selectedSource,
+        language: selectedLanguage,
       }),
     );
   };
@@ -282,15 +304,50 @@ export default function ChatPanel() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground">Language:</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-6 px-2 py-0 text-[10px] gap-1"
+                      >
+                        {LANGUAGE_OPTIONS.find((l) => l.id === selectedLanguage)?.label ?? "English"}
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="min-w-[220px]">
+                      <DropdownMenuLabel className="text-[11px]">Language</DropdownMenuLabel>
+                      {LANGUAGE_OPTIONS.map((lang) => (
+                        <DropdownMenuItem
+                          key={lang.id}
+                          className="text-[11px]"
+                          onClick={() => setSelectedLanguage(lang.id)}
+                        >
+                          {lang.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isLoading && (
-            <Badge variant="outline" className="gap-1 border-yellow-500/40 bg-yellow-500/10 text-yellow-400 text-[10px] animate-pulse">
-              <Zap className="h-2.5 w-2.5" />
-              Thinking…
+            <Badge
+              variant="outline"
+              className="gap-1 border-red-500/40 bg-red-500/10 text-red-400 text-[10px] animate-pulse"
+            >
+              <Zap className="h-2.5 w-2.5 text-red-400" />
+              {currentPendingStep
+                ? `${currentPendingStep.slice(0, 48)}${
+                    currentPendingStep.length > 48 ? "…" : ""
+                  }`
+                : "Reasoning…"}
             </Badge>
           )}
           <Badge variant="outline" className="gap-1 text-[10px] border-green-500/40 bg-green-500/10 text-green-400">
@@ -442,7 +499,7 @@ export default function ChatPanel() {
                   </div>
                 )}
 
-                {/* Meta row — latency, tokens in/out, model */}
+                {/* Meta row — latency, tokens in/out, model, actions */}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                   {msg.latencyMs != null && (
                     <span className="flex items-center gap-0.5">
@@ -466,6 +523,40 @@ export default function ChatPanel() {
                       <Sparkles className="h-2.5 w-2.5" />
                       {msg.model}
                     </span>
+                  )}
+                  {msg.role === "assistant" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const kind =
+                          msg.text?.toLowerCase().includes("case number") ||
+                          msg.text?.toLowerCase().includes("status:")
+                            ? "case"
+                            : msg.text?.toLowerCase().includes("datasheet") ||
+                              msg.text?.toLowerCase().includes("specifications")
+                              ? "datasheet"
+                              : "general";
+                        const summaryPrompt =
+                          kind === "datasheet"
+                            ? "Summarize your previous answer as a concise product datasheet summary with key specs, options, and usage notes."
+                            : kind === "case"
+                              ? "Summarize your previous answer as a support case summary, highlighting customer, issue, actions taken, and current status."
+                              : "Give a short executive summary of your previous answer, focusing on the most important points.";
+                        dispatch(
+                          sendMessage({
+                            sessionId: activeId,
+                            message: summaryPrompt,
+                            modelProfile: selectedModelProfile,
+                            dataSource: selectedSource,
+                            language: selectedLanguage,
+                          }),
+                        );
+                      }}
+                      className="ml-1 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] hover:bg-background text-muted-foreground"
+                    >
+                      <Sparkles className="h-2.5 w-2.5" />
+                      Summary
+                    </button>
                   )}
                 </div>
               </div>
